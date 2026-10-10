@@ -1,30 +1,15 @@
 /* Hero */
-.hero {
-  position: relative;
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  overflow: hidden;
-  padding: 120px 0 80px;
-}
-
 .hero__inner {
   position: relative;
   z-index: 1;
+  height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  text-align: center;
   gap: var(--space-lg);
-}
-
-.hero__badge {
-  background: rgba(139, 92, 246, 0.15);
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  color: var(--clr-primary-light);
-  font-size: 0.8rem;
-  gap: 6px;
+  padding: 120px 0 80px;
 }
 
 .hero__title {
@@ -44,36 +29,6 @@
   line-height: 1.7;
 }
 
-/* Stats row */
-.hero__stats {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xl);
-  margin: var(--space-sm) 0;
-}
-.hero__stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-.hero__stat-num {
-  font-family: var(--font-display);
-  font-size: 2rem;
-  font-weight: 800;
-}
-.hero__stat-label {
-  font-size: 0.75rem;
-  color: var(--txt-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-.hero__stat-divider {
-  width: 1px;
-  height: 40px;
-  background: var(--clr-border);
-}
-
 /* CTA */
 .hero__cta {
   display: inline-flex;
@@ -89,6 +44,7 @@
   text-decoration: none;
   box-shadow: 0 4px 24px rgba(139, 92, 246, 0.4);
   transition: all var(--dur-base) var(--ease-smooth);
+  pointer-events: auto;
 }
 .hero__cta:hover {
   background: var(--grad-brand-hover);
@@ -101,27 +57,6 @@
   transition: transform var(--dur-fast) var(--ease-smooth);
 }
 .hero__cta:hover svg { transform: translateY(3px); }
-
-/* Floating notes */
-.hero__notes {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-.hero__note {
-  position: absolute;
-  font-size: 1.5rem;
-  opacity: 0.12;
-  animation: floatNote 8s ease-in-out infinite;
-  animation-delay: calc(var(--i) * 1.1s);
-  left: calc(10% + var(--i) * 11%);
-  top: calc(10% + (var(--i) % 3) * 25%);
-}
-@keyframes floatNote {
-  0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.12; }
-  50%       { transform: translateY(-30px) rotate(15deg); opacity: 0.2; }
-}
 
 /* Genres section */
 .genres-section {
@@ -176,7 +111,6 @@
 }
 
 @media (max-width: 600px) {
-  .hero__stats { gap: var(--space-lg); }
   .genre-grid  { grid-template-columns: 1fr; }
   .footer__inner { justify-content: center; text-align: center; }
 }

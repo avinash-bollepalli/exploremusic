@@ -1,0 +1,40 @@
+.etched-accretion {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  overflow: hidden;
+  height: 100vh;
+}
+
+@supports (height: 100svh) {
+  .etched-accretion {
+    height: var(--eh, 100svh);
+  }
+}
+
+@media (max-width: 600px) {
+  .etched-accretion {
+    height: 70vh;
+  }
+}
+
+.etched-accretion__canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+}
+
+.etched-accretion__fallback {
+  position: absolute;
+  inset: 0;
+}
+
+.etched-accretion__content {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+}

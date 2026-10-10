@@ -1,40 +1,22 @@
 import { genres } from '../data/genres'
 import GenreCard from '../components/GenreCard'
+import EtchedAccretion from '../components/EtchedAccretion'
 import './Home.css'
 
 export default function Home() {
   return (
     <div className="home page-enter">
       {/* Hero */}
-      <section className="hero" aria-label="Hero section">
+      <EtchedAccretion className="hero" preset="glacier" aria-label="Hero section">
         <div className="container hero__inner">
-          <div className="hero__badge pill">
-            <span>🎵</span> Powered by Spotify API
-          </div>
           <h1 className="hero__title">
             Discover the <span className="gradient-text">Sound</span><br/>
             of Every World
           </h1>
           <p className="hero__subtitle">
-            Dive into {genres.length} curated music genres, explore their unique vibes,
-            and find the artists who define them.
+            Pulled in by rhythm, not gravity — dive into {genres.length} curated genres
+            and meet the artists orbiting each one.
           </p>
-          <div className="hero__stats">
-            <div className="hero__stat">
-              <span className="hero__stat-num gradient-text">{genres.length}</span>
-              <span className="hero__stat-label">Genres</span>
-            </div>
-            <div className="hero__stat-divider"/>
-            <div className="hero__stat">
-              <span className="hero__stat-num gradient-text">∞</span>
-              <span className="hero__stat-label">Artists</span>
-            </div>
-            <div className="hero__stat-divider"/>
-            <div className="hero__stat">
-              <span className="hero__stat-num gradient-text">Live</span>
-              <span className="hero__stat-label">Spotify Data</span>
-            </div>
-          </div>
           <a href="#genres" className="hero__cta" id="hero-cta">
             Start Exploring
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -42,14 +24,7 @@ export default function Home() {
             </svg>
           </a>
         </div>
-
-        {/* Floating music notes decoration */}
-        <div className="hero__notes" aria-hidden="true">
-          {['🎵','🎶','🎸','🥁','🎷','🎹','🎺','🪗'].map((n, i) => (
-            <span key={i} className="hero__note" style={{ '--i': i }}>{n}</span>
-          ))}
-        </div>
-      </section>
+      </EtchedAccretion>
 
       {/* Genre Grid */}
       <section className="genres-section" id="genres" aria-label="Music genres">
