@@ -19,7 +19,8 @@ flowchart TD
     GenreCard["GenreCard.jsx\nClickable tile"]
     ArtistCard["ArtistCard.jsx\nArtist display"]
     GenreData["data/genres.js\nStatic catalogue"]
-    Spotify["services/spotify.js\nAPI layer"]
+    Spotify["ui/src/services/spotify.js\nBackend API client"]
+    Service["service (Spring Boot)\nToken cache + Spotify proxy"]
     SpotifyAPI["☁️ Spotify API"]
 
     Browser --> HTML --> Main --> App
@@ -32,8 +33,11 @@ flowchart TD
     GenreCard --> GenreData
     GenrePage --> ArtistCard
     GenrePage --> Spotify
-    Spotify --> SpotifyAPI
+    Spotify -- "/api/*" --> Service
+    Service --> SpotifyAPI
 ```
+
+The frontend (`ui`) no longer talks to Spotify directly — it calls the backend (`service`) at `/api/*`, which holds the real Spotify client id/secret and is the only thing that ever talks to `accounts.spotify.com`/`api.spotify.com`.
 
 ---
 
@@ -41,8 +45,41 @@ flowchart TD
 
 ---
 
-### `package.json`
-**Role:** Project manifest — defines the app's identity, scripts, and dependencies.
+### Root `pom.xml`
+**Role:** Maven aggregator for the whole repo — lists `service` and `ui` as modules so `mvn clean install` from the root builds both. It's packaging-only (`<packaging>pom</packaging>`): it has no source of its own and is not a Maven inheritance parent of either module (`service` is parented to `spring-boot-starter-parent`; `ui` has no Java at all). Aggregation (`<modules>`) and inheritance (`<parent>`) are independent in Maven — this project uses the former only at the root.
+
+---
+
+### `service/pom.xml`
+**Role:** Spring Boot application manifest. Parent is `spring-boot-starter-parent:3.3.4`, which pins dependency versions and wires sensible Maven defaults (compiler release, resource filtering, etc.) for Java 21.
+
+**Key dependencies:** `spring-boot-starter-web` (embedded Tomcat + Spring MVC), `spring-boot-configuration-processor` (IDE metadata for `@ConfigurationProperties`), `spring-boot-starter-test` (JUnit 5 + Mockito + `MockRestServiceServer`, test scope). The `spring-boot-maven-plugin` packages an executable jar.
+
+---
+
+### `service/src/main/resources/application.yml`
+**Role:** Backend runtime config — binds environment variables into Spring, never hardcodes secrets.
+
+```yaml
+server:
+  port: 8080
+spotify:
+  client-id: ${SPOTIFY_CLIENT_ID}
+  client-secret: ${SPOTIFY_CLIENT_SECRET}
+  market: ${SPOTIFY_MARKET:US}
+```
+
+`SpotifyProperties` (`@ConfigurationProperties(prefix = "spotify")`) binds the `spotify.*` keys. Devs export `SPOTIFY_CLIENT_ID`/`SPOTIFY_CLIENT_SECRET` in their shell before running the app — there is deliberately no `.env`-file loader here, so local dev, CI, and any future container deploy all configure secrets the same way (plain environment variables).
+
+---
+
+### `ui/pom.xml`
+**Role:** Lets the root `mvn clean install` also produce the frontend build, without disturbing the standalone `npm` workflow. Has no Java code (`<packaging>pom</packaging>`); instead it uses the `frontend-maven-plugin` to download an isolated Node/npm and run `npm install` then `npm run build` as part of Maven's `package` phase. Running `cd ui && npm run dev`/`npm run build` directly still works exactly as before — both paths invoke the same `package.json` scripts, just from different entry points.
+
+---
+
+### `ui/package.json`
+**Role:** Project manifest — defines the app's identity, scripts, and dependencies. Lives at `ui/package.json` since the frontend/backend split (was at the repo root before).
 
 ```json
 {
@@ -66,7 +103,7 @@ flowchart TD
 
 ---
 
-### `vite.config.js`
+### `ui/vite.config.js`
 **Role:** Configures the Vite build tool and dev server.
 
 ```js
@@ -74,12 +111,15 @@ export default defineConfig({
   plugins: [react()],   // Enable React/JSX support
   server: {
     port: 3000,         // Dev server runs at localhost:3000
-    host: true          // Expose on network — needed for Docker later
+    host: true,         // Expose on network — needed for Docker later
+    proxy: {
+      '/api': { target: 'http://localhost:8080', changeOrigin: true }, // forward to service
+    },
   }
 })
 ```
 
-> `host: true` binds the server to `0.0.0.0` instead of just `localhost`. This is already set in anticipation of Docker, where containers must be reachable from outside the container's network namespace.
+> `host: true` binds the server to `0.0.0.0` instead of just `localhost`. This is already set in anticipation of Docker, where containers must be reachable from outside the container's network namespace. The `proxy` block forwards any `/api/*` request from the Vite dev server to `service` on `localhost:8080`, so `npm run dev` only shows real data when the backend is also running. Production topology (same-origin vs. CORS) is still a roadmap item.
 
 ---
 
@@ -95,16 +135,8 @@ Key contributions:
 
 ---
 
-### `.env.example`
-**Role:** Template for the secrets file. Safe to commit — contains no real credentials.
-
-```env
-VITE_SPOTIFY_CLIENT_ID=your_spotify_client_id_here
-VITE_SPOTIFY_CLIENT_SECRET=your_spotify_client_secret_here
-```
-
-Developers clone this → `cp .env.example .env` → fill in real values.
-The `VITE_` prefix is **required** by Vite to expose variables to the browser bundle at build time.
+### Spotify credentials — no longer a frontend concern
+Before the backend split, credentials lived in a frontend `.env.example`/`.env` using the `VITE_SPOTIFY_CLIENT_ID`/`VITE_SPOTIFY_CLIENT_SECRET` vars — and because Vite inlines `VITE_`-prefixed vars into the shipped browser bundle, **the client secret was shipped to every visitor**. That file is gone. Credentials now live only on the backend, as plain `SPOTIFY_CLIENT_ID`/`SPOTIFY_CLIENT_SECRET` environment variables (see `service/src/main/resources/application.yml` above) — they're read server-side and never serialized into any response the browser receives.
 
 ---
 
@@ -115,9 +147,10 @@ Critical exclusions:
 
 | Entry | Why excluded |
 |-------|-------------|
-| `node_modules/` | 152 packages, ~100MB — regenerated by `npm install` |
-| `.env` | Contains real Spotify secrets — must never be committed |
-| `dist/` | Generated build output, not source code |
+| `node_modules/` | npm packages under `ui/` — regenerated by `npm install` |
+| `.env` / `.env.*` | Would contain real secrets if anyone added one — must never be committed |
+| `dist/` | Generated frontend build output (`ui/dist/`), not source code |
+| `target/` | Generated Maven build output (`service/target/`), not source code |
 | `.DS_Store` | macOS metadata files |
 
 ---
@@ -244,31 +277,47 @@ This file is imported by **four** different files:
 
 ---
 
-### `src/services/spotify.js`
-**Role:** All communication with the Spotify Web API. Isolates API logic from UI components.
+### `ui/src/services/spotify.js`
+**Role:** All communication with the backend's `/api/*` surface. Isolates API logic from UI components — same exported function names/signatures as before the backend split, so no calling component needed to change.
 
-**Authentication flow (Client Credentials):**
+```js
+async function apiFetch(endpoint) {
+  const res = await fetch(`/api${endpoint}`)
+  if (!res.ok) throw new Error(`API error: ${res.status} — ${endpoint}`)
+  return res.json()
+}
 ```
-Component calls getArtistsByGenre("jazz")
-  → getAccessToken() checks cache
-    → if expired: POST /api/token with Base64(clientId:clientSecret)
-      → Spotify returns { access_token, expires_in: 3600 }
-      → token cached in memory for ~59 minutes
-  → authenticated GET /search?q=genre:"jazz"&type=artist
-    → returns Spotify artist objects
-```
-
-No user login is required — Client Credentials flow is server-to-server (app authenticates, not the user).
 
 **Exported functions:**
 
-| Function | Endpoint | What it returns |
+| Function | Calls | What it returns |
 |----------|----------|----------------|
-| `getArtistsByGenre(genre, limit)` | `GET /search?q=genre:"jazz"&type=artist` | Array of artist objects |
-| `getAvailableGenres()` | `GET /recommendations/available-genre-seeds` | Array of genre strings |
-| `getArtist(artistId)` | `GET /artists/:id` | Single artist full profile |
-| `getArtistTopTracks(artistId)` | `GET /artists/:id/top-tracks` | Array of track objects |
-| `getRelatedArtists(artistId)` | `GET /artists/:id/related-artists` | Array of artist objects |
+| `getArtistsByGenre(genre, limit)` | `GET /api/artists?genre=jazz&limit=12` | Array of artist objects |
+| `getAvailableGenres()` | `GET /api/genres` | Array of genre strings |
+| `getArtist(artistId)` | `GET /api/artists/:id` | Single artist full profile |
+| `getArtistTopTracks(artistId, market)` | `GET /api/artists/:id/top-tracks?market=US` | Array of track objects |
+| `getRelatedArtists(artistId)` | `GET /api/artists/:id/related-artists` | Array of artist objects |
+
+---
+
+### `service/src/main/java/com/exploremusic/service/spotify/SpotifyTokenService.java`
+**Role:** Server-side equivalent of the token-caching logic that used to live in the browser. Holds the real `clientId`/`clientSecret` (from `SpotifyProperties`) and never exposes them past this class.
+
+**Authentication flow (Client Credentials), now server-to-server for real:**
+```
+ArtistController calls SpotifyClient.searchArtistsByGenre("jazz", 12)
+  → SpotifyClient calls SpotifyTokenService.getAccessToken() (synchronized)
+    → if cached token still valid (now < expiry): return it, no HTTP call
+    → else: POST https://accounts.spotify.com/api/token, Basic Base64(clientId:clientSecret)
+      → Spotify returns { access_token, expires_in: 3600 }
+      → cache token, expiry = now + (expires_in - 60s)
+  → authenticated GET https://api.spotify.com/v1/search?q=genre:"jazz"&type=artist
+    → raw Spotify JSON returned, unwrapped to `artists.items`, straight back to the browser
+```
+The `synchronized` method (rather than a lock-free `AtomicReference`) deliberately avoids a thundering herd of simultaneous token re-fetches when multiple requests arrive right as the cache expires — call volume here is low enough (at most ~once per 59 minutes under load) that the lock is never a bottleneck.
+
+### `service/src/main/java/com/exploremusic/service/spotify/SpotifyClient.java` + `api/ArtistController.java`
+**Role:** `SpotifyClient` calls `api.spotify.com` and returns Spotify's JSON **unmodified** (as Jackson `JsonNode`, not hand-rolled Java DTOs) — this is a deliberate choice: `ArtistCard.jsx` depends on the exact raw Spotify artist shape (`images`, `followers.total`, `genres`, `popularity`, `external_urls.spotify`, `name`, `id`), and passing the JSON through unmodified guarantees the frontend never drifts out of sync with a hand-maintained backend contract. `ArtistController` exposes this as plain REST endpoints under `/api/*` (see table above) — each one maps 1:1 to a function that used to live directly in the browser's `spotify.js`.
 
 ---
 
@@ -432,11 +481,15 @@ User clicks "Jazz" card
     → Route "/genre/:genreId" matched → GenrePage.jsx renders
       → useParams() returns { genreId: "jazz" }
       → genres.find() returns Jazz genre object
-      → getArtistsByGenre("jazz", 12) called
-        → getAccessToken() → POST to Spotify accounts API
-          → Bearer token returned + cached
-        → GET /search?q=genre:"jazz"&type=artist
-          → 12 artist objects returned
+      → getArtistsByGenre("jazz", 12) called (ui/src/services/spotify.js)
+        → fetch('/api/artists?genre=jazz&limit=12')
+          → [dev] Vite proxy forwards to http://localhost:8080
+          → ArtistController.getArtistsByGenre("jazz", 12) (service)
+            → SpotifyClient.searchArtistsByGenre
+              → SpotifyTokenService.getAccessToken() (cache hit, or POST to Spotify accounts API + cache)
+              → GET https://api.spotify.com/v1/search?q=genre:"jazz"&type=artist
+                → raw Spotify JSON, unwrapped to artists.items
+          → 12 artist objects returned to the browser, unmodified
             → 12 × ArtistCard.jsx rendered with live data
 
 User types "hip" in the header search
@@ -454,5 +507,6 @@ User types "hip" in the header search
 | Phase | Feature | Status |
 |-------|---------|--------|
 | 1 | Website with genre browser + Spotify artists | ✅ Done |
-| 2 | Dockerfile + multi-stage build | 🔜 Next |
-| 3 | Kubernetes manifests (Deployment, Service, Ingress) | 🔜 Later |
+| 2 | Spring Boot `service` module proxying Spotify credentials (split from `ui`) | ✅ Done |
+| 3 | Dockerfile + multi-stage build | 🔜 Next |
+| 4 | Kubernetes manifests (Deployment, Service, Ingress) | 🔜 Later |

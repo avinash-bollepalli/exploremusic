@@ -1,8 +1,10 @@
 # Dependencies
 node_modules/
+ui/node/
 
 # Build output
 dist/
+target/
 
 # Environment variables (NEVER commit real credentials)
 .env

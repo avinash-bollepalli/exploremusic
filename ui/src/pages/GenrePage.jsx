@@ -30,7 +30,7 @@ export default function GenrePage() {
       })
       .catch(err => {
         console.error(err)
-        setError('Could not load artists. Check your Spotify API credentials in .env')
+        setError('Could not load artists. Is the backend service running?')
         setLoading(false)
       })
   }, [genre])
