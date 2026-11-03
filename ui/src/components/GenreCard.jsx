@@ -246,7 +246,7 @@ export default function GenreCard({
         role="button"
         tabIndex={0}
         aria-pressed={flipped}
-        aria-label={`${genre.name} badge, press to see details`}
+        aria-label={`${genre.bpmRange} BPM badge, press to see details`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={(e) => endGesture(e, false)}
@@ -258,15 +258,14 @@ export default function GenreCard({
         onKeyDown={handleKeyDown}
       >
         <div className="genre-badge__face genre-badge__face--front" aria-hidden={flipped}>
-          <span className="genre-badge__band genre-badge__band--tall" />
-          <span className="genre-badge__photo">{genre.emoji}</span>
-          <h3 className="genre-badge__name">{genre.name}</h3>
-          <p className="genre-badge__secondary">{genre.vibe}</p>
+          <span className="genre-badge__band" />
+          <h3 className="genre-badge__name genre-badge__name--bpm">{genre.bpmRange}</h3>
+          <p className="genre-badge__secondary genre-badge__secondary--bpm">BPM</p>
           <span className="genre-badge__divider" aria-hidden="true" />
           <Link
-            to={`/genre/${genre.id}`}
+            to={`/bpm/${genre.bpmRange.replace('–', '-')}`}
             className="genre-badge__explore"
-            aria-label={`Explore ${genre.name} music`}
+            aria-label={`See genres near ${genre.bpmRange} BPM`}
             tabIndex={flipped ? -1 : undefined}
             onPointerDown={(e) => e.stopPropagation()}
           >
@@ -278,14 +277,12 @@ export default function GenreCard({
         </div>
         <div className="genre-badge__face genre-badge__face--back" aria-hidden={!flipped}>
           <span className="genre-badge__band" />
-          <h3 className="genre-badge__name genre-badge__name--small">{genre.name}</h3>
-          <p className="genre-badge__secondary">{genre.vibe}</p>
-          <p className="genre-badge__bio">{genre.description}</p>
-          <div className="genre-badge__tags">
-            {genre.tags.map((tag) => (
-              <span key={tag} className="genre-badge__tag">{tag}</span>
+          <h3 className="genre-badge__name genre-badge__name--small">{genre.bpmRange} BPM</h3>
+          <ul className="genre-badge__list">
+            {genre.genres.map((name) => (
+              <li key={name} className="genre-badge__list-item">{name}</li>
             ))}
-          </div>
+          </ul>
         </div>
       </div>
     </div>

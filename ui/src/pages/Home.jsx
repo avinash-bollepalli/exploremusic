@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { genres } from '../data/genres'
+import { bpmBuckets } from '../data/bpmBuckets'
 import GenreCard from '../components/GenreCard'
 import EtchedAccretion from '../components/EtchedAccretion'
 import './Home.css'
 
-const MIN_PITCH = 100 // px, comfortable rail spacing per badge before switching to carousel
+const MIN_PITCH = 58 // px, comfortable rail spacing per badge before switching to carousel
 const BADGE_WIDTH_WIDE = 124
 const BADGE_WIDTH_NARROW = 96
 const NARROW_VIEWPORT = 420 // px, below this the badge itself shrinks
@@ -25,7 +25,7 @@ function carouselSlotX(index, activeIndex, peekPitch) {
 export default function Home() {
   const stageRef = useRef(null)
   const badgesRef = useRef(new Map())
-  const slotOrderRef = useRef(genres.map((_, i) => i))
+  const slotOrderRef = useRef(bpmBuckets.map((_, i) => i))
   const rafRef = useRef(0)
   const lastRef = useRef(0)
 
@@ -36,7 +36,7 @@ export default function Home() {
   const [captionShowingBack, setCaptionShowingBack] = useState(false)
   const [reducedMotion, setReducedMotion] = useState(false)
 
-  const count = genres.length
+  const count = bpmBuckets.length
   const isRail = stageWidth >= count * MIN_PITCH
 
   useEffect(() => {
@@ -52,7 +52,9 @@ export default function Home() {
     if (!stage) return
     const measure = (width) => {
       setStageWidth(width)
-      setBadgeWidth(width < NARROW_VIEWPORT ? BADGE_WIDTH_NARROW : BADGE_WIDTH_WIDE)
+      const base = width < NARROW_VIEWPORT ? BADGE_WIDTH_NARROW : BADGE_WIDTH_WIDE
+      const fitWidth = (width / count) * 1.35 // shrink badges to keep the full rail visible when there are many
+      setBadgeWidth(Math.max(BADGE_WIDTH_NARROW, Math.min(base, fitWidth)))
     }
     measure(stage.clientWidth)
     const observer = new ResizeObserver((entries) => {
@@ -131,7 +133,7 @@ export default function Home() {
   }, [count, stageWidth, applyLayout])
 
   const handleReorderEnd = useCallback(() => {
-    slotOrderRef.current = genres.map((_, i) => i)
+    slotOrderRef.current = bpmBuckets.map((_, i) => i)
     applyLayout()
   }, [applyLayout])
 
@@ -153,6 +155,16 @@ export default function Home() {
     }
   }, [count, applyLayout])
 
+  const lastWheelRef = useRef(0)
+  const handleWheel = useCallback((e) => {
+    if (isRail) return // everything's already visible, nothing to scroll
+    if (Math.abs(e.deltaX) < Math.abs(e.deltaY) || Math.abs(e.deltaX) < 10) return
+    const now = performance.now()
+    if (now - lastWheelRef.current < 300) return
+    lastWheelRef.current = now
+    setActiveIndex((prev) => Math.max(0, Math.min(count - 1, prev + (e.deltaX > 0 ? 1 : -1))))
+  }, [isRail, count])
+
   const handleHover = useCallback((index, entering) => {
     if (entering) {
       setCaptionIndex(index)
@@ -172,11 +184,11 @@ export default function Home() {
     setCaptionShowingBack(flipped)
   }, [])
 
-  const captionGenre = captionIndex !== null ? genres[captionIndex] : null
-  const captionTitle = captionGenre
-    ? `${captionGenre.name} — ${captionGenre.vibe}`
-    : 'Click any genre to discover its top artists from Spotify'
-  const captionHint = captionGenre
+  const captionBucket = captionIndex !== null ? bpmBuckets[captionIndex] : null
+  const captionTitle = captionBucket
+    ? `${captionBucket.bpmRange} BPM — ${captionBucket.genres.join(', ')}`
+    : 'Click any tempo range to see which genres live there'
+  const captionHint = captionBucket
     ? (captionShowingBack ? 'Click again to turn it back' : 'Click to flip the badge')
     : ''
 
@@ -190,8 +202,8 @@ export default function Home() {
             of Every World
           </h1>
           <p className="hero__subtitle">
-            Pulled in by rhythm, not gravity — dive into {genres.length} curated genres
-            and meet the artists orbiting each one.
+            Pulled in by rhythm, not gravity — dive into {bpmBuckets.length} tempo ranges
+            and find the genres that live at each speed.
           </p>
           <a href="#genres" className="hero__cta" id="hero-cta">
             Start Exploring
@@ -207,10 +219,10 @@ export default function Home() {
         <div className="container">
           <div className="genres-section__header">
             <h2 className="genres-section__title">
-              Explore by <span className="gradient-text">Genre</span>
+              Explore by <span className="gradient-text">Tempo</span>
             </h2>
             <p className="genres-section__subtitle">
-              Click any genre to discover its top artists from Spotify
+              Click any BPM range to see which genres live there
             </p>
           </div>
 
@@ -219,13 +231,14 @@ export default function Home() {
             className="genre-rail"
             data-mode={isRail ? 'rail' : 'carousel'}
             style={{ '--badge-w': `${badgeWidth}px` }}
+            onWheel={handleWheel}
           >
             <span className="genre-rail__bar" aria-hidden="true" />
             <div className="genre-rail__track" role="list">
-              {genres.map((genre, i) => (
+              {bpmBuckets.map((bucket, i) => (
                 <GenreCard
-                  key={genre.id}
-                  genre={genre}
+                  key={bucket.id}
+                  genre={bucket}
                   index={i}
                   restingAngle={RESTING_TILTS[i % RESTING_TILTS.length]}
                   mode={isRail ? 'rail' : 'carousel'}
@@ -249,14 +262,14 @@ export default function Home() {
           </div>
 
           {!isRail && stageWidth > 0 && (
-            <div className="genre-rail__dots" role="tablist" aria-label="Show genre">
-              {genres.map((genre, i) => (
+            <div className="genre-rail__dots" role="tablist" aria-label="Show BPM range">
+              {bpmBuckets.map((bucket, i) => (
                 <button
-                  key={genre.id}
+                  key={bucket.id}
                   type="button"
                   role="tab"
                   aria-selected={activeIndex === i}
-                  aria-label={`Show ${genre.name}`}
+                  aria-label={`Show ${bucket.bpmRange} BPM`}
                   className="genre-rail__dot"
                   data-active={activeIndex === i || undefined}
                   onClick={() => setActiveIndex(i)}
